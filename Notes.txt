@@ -12,9 +12,15 @@ pip install PyGObject
 
 python run.py
 
-
-or build from source!
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Arm bibary already supplied but if using x86 64 then recomile!
+and build from source!
 
 gcc -o duplicate-remover duplicate-remover.c -lcrypto `pkg-config --cflags --libs gtk+-3.0`
+
+
+After you can compiled the c program and made the binary run ./install.sh to install to your system!
+
+
 
 
