@@ -1,0 +1,9 @@
+sudo apt update
+sudo apt install -y build-essential gobject-introspection libgirepository1.0-dev
+pip install PyGObject
+gcc -o duplicate-remover duplicate-remover.c -lcrypto
+
+
+gcc -o duplicate-remover duplicate-remover.c -lcrypto `pkg-config --cflags --libs gtk+-3.0`
+
+
