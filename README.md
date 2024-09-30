@@ -6,8 +6,11 @@ running the arm binary file is for ARM Ubuntu 64 Bit Compile on your x86 and sen
 
 Read Notes for help with C and python experiance!
 
-
 python run.py
 
+
+After compiled binary make executable and run
+
+sudo chmod +x file
 
 ./file
