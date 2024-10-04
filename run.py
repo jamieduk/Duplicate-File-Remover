@@ -9,26 +9,41 @@
 #
 import os
 import hashlib
+import argparse
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
 class DuplicateFileChecker:
-    def __init__(self):
+    def __init__(self, file_type):
         try:
             self.root=tk.Tk()
             self.root.title("Duplicate File Remover")
+            self.root.configure(bg="#2e2e2e")  # Dark theme background
 
-            self.recursive=tk.BooleanVar(value=False)
-            self.auto_remove=tk.BooleanVar(value=True)
+            # Checkboxes that are initially checked and disabled
+            self.recursive=tk.BooleanVar(value=True)  # Checked by default
+            self.auto_remove=tk.BooleanVar(value=True)  # Checked by default
 
-            tk.Checkbutton(self.root, text="Recursive Scan", variable=self.recursive).pack(pady=5)
-            tk.Checkbutton(self.root, text="Auto Remove Duplicates", variable=self.auto_remove).pack(pady=5)
+            self.recursive_checkbox=tk.Checkbutton(self.root, text="Recursive Scan", variable=self.recursive, bg="#2e2e2e", fg="white", state="disabled")
+            self.auto_remove_checkbox=tk.Checkbutton(self.root, text="Auto Remove Duplicates", variable=self.auto_remove, bg="#2e2e2e", fg="white", state="disabled")
 
-            tk.Button(self.root, text="Edit Scan List", command=self.edit_scan_list).pack(pady=10)
-            tk.Button(self.root, text="Add to Scan List", command=self.add_to_scan_list).pack(pady=10)
-            tk.Button(self.root, text="Remove from Scan List", command=self.remove_from_scan_list).pack(pady=10)
-            tk.Button(self.root, text="Scan for Duplicates", command=self.scan_for_duplicates).pack(pady=10)
-            tk.Button(self.root, text="About", command=self.show_about).pack(pady=10)
+            # Select both checkboxes
+            self.recursive_checkbox.select()
+            self.auto_remove_checkbox.select()
+
+            self.recursive_checkbox.pack(pady=5)
+            self.auto_remove_checkbox.pack(pady=5)
+
+            tk.Label(self.root, text="File Type (e.g., *.jpg):", bg="#2e2e2e", fg="white").pack(pady=5)
+            self.file_type_entry=tk.Entry(self.root, bg="#444444", fg="white")
+            self.file_type_entry.pack(pady=5)
+            self.file_type_entry.insert(0, file_type)  # Default file type
+
+            tk.Button(self.root, text="Edit Scan List", command=self.edit_scan_list, bg="#444444", fg="white").pack(pady=10)
+            tk.Button(self.root, text="Add to Scan List", command=self.add_to_scan_list, bg="#444444", fg="white").pack(pady=10)
+            tk.Button(self.root, text="Remove from Scan List", command=self.remove_from_scan_list, bg="#444444", fg="white").pack(pady=10)
+            tk.Button(self.root, text="Scan for Duplicates", command=self.scan_for_duplicates, bg="#444444", fg="white").pack(pady=10)
+            tk.Button(self.root, text="About", command=self.show_about, bg="#444444", fg="white").pack(pady=10)
 
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
             self.scan_directories=[]
@@ -67,9 +82,10 @@ class DuplicateFileChecker:
     def edit_scan_list(self):
         edit_window=tk.Toplevel(self.root)
         edit_window.title("Edit Scan List")
-        
+        edit_window.configure(bg="#2e2e2e")  # Dark theme background
+
         for dir in self.scan_directories:
-            tk.Label(edit_window, text=dir).pack()
+            tk.Label(edit_window, text=dir, bg="#2e2e2e", fg="white").pack()
 
     def show_about(self):
         messagebox.showinfo("About", "Author: Jay @ J~Net 2024")
@@ -84,38 +100,41 @@ class DuplicateFileChecker:
             total_removed=0
             seen_files={}  # Dictionary to track seen files across all directories
 
-            # Process each directory and gather all image files
+            file_type=self.file_type_entry.get().strip().lower()
+            if not file_type or file_type == "*.*":
+                file_type=None  # No filter
+            elif not file_type.startswith("*."):
+                file_type=f"*.{file_type}"  # Ensure it starts with *
+
+            # Process each directory and gather all files
             for directory in self.scan_directories:
                 if self.recursive.get():
                     for root, _, files in os.walk(directory):
-                        duplicates_found, removed=self.check_files(root, files, seen_files)
+                        duplicates_found, removed=self.check_files(root, files, seen_files, file_type)
                         total_duplicates_found += duplicates_found
                         total_removed += removed
                 else:
                     files=[f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-                    duplicates_found, removed=self.check_files(directory, files, seen_files)
+                    duplicates_found, removed=self.check_files(directory, files, seen_files, file_type)
                     total_duplicates_found += duplicates_found
                     total_removed += removed
 
             if total_duplicates_found == 0:
                 messagebox.showinfo("Duplicate Removal Complete", "No duplicates found.")
             else:
-                messagebox.showinfo("Duplicate Removal Complete", 
+                messagebox.showinfo("Duplicate Removal Complete",
                                     f"Total duplicates found: {total_duplicates_found}\nTotal removed: {total_removed}")
 
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred during scanning: {str(e)}")
 
-    def check_files(self, directory, files, seen_files):
+    def check_files(self, directory, files, seen_files, file_type):
         duplicates_found=0
         removed=0
 
-        # Supported image file extensions
-        image_extensions=('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')
-
         for filename in files:
-            # Only process image files
-            if not filename.lower().endswith(image_extensions):
+            # Only process files matching the specified file type
+            if file_type and not filename.lower().endswith(file_type[1:]):
                 continue
             
             file_path=os.path.join(directory, filename)
@@ -160,6 +179,12 @@ class DuplicateFileChecker:
             print(f"Error calculating hash for {filepath}: {e}")
             return None  # Return None if there's an error in reading the file
 
+def parse_arguments():
+    parser=argparse.ArgumentParser(description="Duplicate File Remover")
+    parser.add_argument("-t", "--type", default="*.*", help="File type to search for (e.g., *.jpg)")
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    DuplicateFileChecker()
+    args=parse_arguments()
+    DuplicateFileChecker(args.type)
 
