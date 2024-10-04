@@ -1,0 +1,19 @@
+Example Usage
+To scan all files:
+
+
+./duplicate-remover -d /path/to/directory
+This will check for duplicates of all file types.
+
+To scan for duplicates only in .jpg files:
+
+
+./duplicate-remover -d /path/to/directory -f .jpg
+This will only check for duplicates among .jpg files.
+
+Additional Options
+Recursive Scanning: You can add -r to check for duplicates in all subdirectories as well.
+Auto Removal: Adding -a will automatically remove the detected duplicates without prompting you for confirmation.
+This flexibility allows you to tailor the application to your needs, whether you want to scan everything or focus on specific file types.
+
+
