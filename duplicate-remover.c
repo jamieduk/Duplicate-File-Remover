@@ -1,7 +1,6 @@
 // Made By Jay @ J~Net 2024
 // gcc -o duplicate-remover duplicate-remover.c `pkg-config --cflags --libs gtk+-3.0 openssl`
 //
-
 #include <gtk/gtk.h>
 #include <openssl/evp.h>
 #include <stdio.h>
@@ -12,7 +11,6 @@
 #include <unistd.h>
 
 #define BUFFER_SIZE 4096
-#define MAX_FILE_TYPE_LENGTH 20
 
 // Function to calculate the MD5 hash of a file
 void calculate_md5(const char *filename, unsigned char *md) {
@@ -56,7 +54,7 @@ void calculate_md5(const char *filename, unsigned char *md) {
 }
 
 // Global variables for UI components
-GtkWidget *auto_remove_check, *recursive_check, *file_type_entry;
+GtkWidget *auto_remove_check, *recursive_check;
 GtkListStore *directory_store;
 
 // Function to add a directory to the list
@@ -77,18 +75,8 @@ void add_directory(GtkButton *button, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
-// Function to check file extension against the specified filter
-gboolean file_extension_matches(const char *filename, const char *filter) {
-    if (strcmp(filter, "*.*") == 0) return TRUE; // All files
-
-    const char *ext=strrchr(filename, '.');
-    if (!ext) return FALSE; // No extension found
-
-    return strcmp(ext, filter) == 0; // Match the filter
-}
-
 // Function to remove duplicates
-void remove_duplicates(const char *directory, gboolean recursive, gboolean auto_remove, const char *filter, GHashTable *hash_table) {
+void remove_duplicates(const char *directory, gboolean recursive, gboolean auto_remove, GHashTable *hash_table) {
     DIR *dir;
     struct dirent *entry;
     char path[PATH_MAX];
@@ -100,12 +88,10 @@ void remove_duplicates(const char *directory, gboolean recursive, gboolean auto_
         if (entry->d_type == DT_DIR) {
             if (recursive && strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
                 snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
-                remove_duplicates(path, recursive, auto_remove, filter, hash_table);
+                remove_duplicates(path, recursive, auto_remove, hash_table);
             }
         } else {
             snprintf(path, sizeof(path), "%s/%s", directory, entry->d_name);
-            if (!file_extension_matches(path, filter)) continue; // Skip files not matching the filter
-
             unsigned char md[EVP_MAX_MD_SIZE];
             calculate_md5(path, md);
             char md5_string[33];
@@ -128,26 +114,54 @@ void remove_duplicates(const char *directory, gboolean recursive, gboolean auto_
     closedir(dir);
 }
 
-// Function to start scanning for duplicates
-void start_scan(GtkButton *button, gpointer user_data) {
-    gboolean recursive=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(recursive_check));
-    gboolean auto_remove=gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(auto_remove_check));
-    const gchar *filter=gtk_entry_get_text(GTK_ENTRY(file_type_entry));
-
-    GHashTable *hash_table=g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
+typedef struct {
+    GHashTable *hash_table;
+    gboolean recursive;
+    gboolean auto_remove;
     GtkTreeIter iter;
-    gboolean valid=gtk_tree_model_get_iter_first(GTK_TREE_MODEL(directory_store), &iter);
-    while (valid) {
-        gchar *directory;
-        gtk_tree_model_get(GTK_TREE_MODEL(directory_store), &iter, 0, &directory, -1);
-        remove_duplicates(directory, recursive, auto_remove, filter, hash_table);
-        g_free(directory);
-        valid=gtk_tree_model_iter_next(GTK_TREE_MODEL(directory_store), &iter);
+    GtkTreeModel *model;
+    GtkWidget *status_label;
+} ScanData;
+
+gboolean process_directory(gpointer user_data) {
+    ScanData *data = (ScanData *)user_data;
+    gchar *directory;
+
+    if (!gtk_tree_model_get_iter_first(GTK_TREE_MODEL(data->model), &data->iter)) {
+        gtk_label_set_text(GTK_LABEL(data->status_label), "Scan complete");
+        g_hash_table_destroy(data->hash_table);
+        g_free(data);
+        return FALSE; // Stop the idle function
     }
 
-    g_hash_table_destroy(hash_table);
-    gtk_label_set_text(GTK_LABEL(user_data), "Scan complete");
+    do {
+        gtk_tree_model_get(GTK_TREE_MODEL(data->model), &data->iter, 0, &directory, -1);
+        remove_duplicates(directory, data->recursive, data->auto_remove, data->hash_table);
+        g_free(directory);
+    } while (gtk_tree_model_iter_next(GTK_TREE_MODEL(data->model), &data->iter));
+
+    gtk_label_set_text(GTK_LABEL(data->status_label), "Scan complete");
+    g_hash_table_destroy(data->hash_table);
+    g_free(data);
+    return FALSE; // Stop the idle function
+}
+
+// Function to start scanning for duplicates
+void start_scan(GtkButton *button, gpointer user_data) {
+    gboolean recursive = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(recursive_check));
+    gboolean auto_remove = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(auto_remove_check));
+
+    GHashTable *hash_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+    ScanData *data = g_malloc(sizeof(ScanData));
+    data->hash_table = hash_table;
+    data->recursive = recursive;
+    data->auto_remove = auto_remove;
+    data->model = GTK_TREE_MODEL(directory_store);
+    data->status_label = GTK_WIDGET(user_data);
+
+    gtk_label_set_text(GTK_LABEL(user_data), "Scanning...");
+    g_idle_add(process_directory, data); // Process the directories incrementally
 }
 
 // Function to display the "About" dialog
@@ -164,6 +178,8 @@ void show_about(GtkButton *button, gpointer user_data) {
 // Function to create the main window
 GtkWidget* create_window() {
     GtkWidget *window, *vbox, *hbox, *scrolled_window, *tree_view, *button, *status_label;
+    GtkCellRenderer *renderer;
+    GtkTreeViewColumn *column;
 
     window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Duplicate File Remover");
@@ -179,19 +195,14 @@ GtkWidget* create_window() {
     recursive_check=gtk_check_button_new_with_label("Recursive Scan");
     gtk_box_pack_start(GTK_BOX(vbox), recursive_check, FALSE, FALSE, 0);
 
-    // File type entry
-    file_type_entry=gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(file_type_entry), "*.*"); // Default value
-    gtk_box_pack_start(GTK_BOX(vbox), file_type_entry, FALSE, FALSE, 0);
-
     scrolled_window=gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_box_pack_start(GTK_BOX(vbox), scrolled_window, TRUE, TRUE, 0);
 
     directory_store=gtk_list_store_new(1, G_TYPE_STRING);
     tree_view=gtk_tree_view_new_with_model(GTK_TREE_MODEL(directory_store));
-    GtkCellRenderer *renderer=gtk_cell_renderer_text_new();
-    GtkTreeViewColumn *column=gtk_tree_view_column_new_with_attributes("Directories", renderer, "text", 0, NULL);
+    renderer=gtk_cell_renderer_text_new();
+    column=gtk_tree_view_column_new_with_attributes("Directories", renderer, "text", 0, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tree_view), column);
     gtk_container_add(GTK_CONTAINER(scrolled_window), tree_view);
 
@@ -213,60 +224,19 @@ GtkWidget* create_window() {
 
     gtk_box_pack_start(GTK_BOX(vbox), status_label, FALSE, FALSE, 0);
 
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     return window;
-}
-
-// Function to display help information
-void show_help() {
-    printf("Usage: duplicate-remover [options]\n");
-    printf("Options:\n");
-    printf("  -d, --directory <path>   Specify the directory to scan\n");
-    printf("  -f, --filetype <type>     Specify the file type to filter (default: *.*)\n");
-    printf("  -r, --recursive           Perform a recursive scan\n");
-    printf("  -a, --auto-remove         Automatically remove duplicates\n");
-    printf("  -h, --help                Display this help message\n");
 }
 
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
-    // Command-line argument processing
-    const char *directory=NULL;
-    const char *file_type="*.*"; // Default filter
-    gboolean recursive=FALSE;
-    gboolean auto_remove=FALSE;
-
-    for (int i=1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            show_help();
-            return 0;
-        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--directory") == 0) {
-            if (i + 1 < argc) {
-                directory=argv[++i];
-            }
-        } else if (strcmp(argv[i], "-f") == 0 || strcmp(argv[i], "--filetype") == 0) {
-            if (i + 1 < argc) {
-                file_type=argv[++i];
-            }
-        } else if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--recursive") == 0) {
-            recursive=TRUE;
-        } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--auto-remove") == 0) {
-            auto_remove=TRUE;
-        }
-    }
-
     GtkWidget *window=create_window();
+
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     gtk_widget_show_all(window);
 
-    // If a directory is provided via command-line, add it to the list
-    if (directory) {
-        GtkTreeIter iter;
-        gtk_list_store_append(directory_store, &iter);
-        gtk_list_store_set(directory_store, &iter, 0, directory, -1);
-    }
-
     gtk_main();
+
     return 0;
 }
 
