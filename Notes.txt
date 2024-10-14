@@ -1,51 +1,13 @@
-File Duplicate Remover
 
-https://github.com/jamieduk/Duplicate-File-Remover
 
 
 sudo apt update
-sudo apt install -y build-essential gobject-introspection libgirepository1.0-dev
-
-venv
-
-pip install PyGObject
-
-python run.py
+sudo apt install -y libgtk-3-dev zlib1g-dev
 
 
-this works will it also work on windows aswell as linux?
-
-ChatGPT said:
-ChatGPT
-Yes, the updated code will work on both Windows and Linux. Tkinter is a cross-platform GUI toolkit, meaning that it provides a consistent interface for creating GUI applications on different operating systems, including Windows, macOS, and Linux.
-
-Considerations for Cross-Platform Compatibility:
-File Paths:
-
-When using file paths, ensure you use os.path.join() to construct paths, as it handles differences in file path separators (e.g., \ on Windows and / on Linux).
-File Dialogs:
-
-The filedialog module in Tkinter will open the appropriate file dialog for the operating system, so you shouldn't have any issues with that.
-Dependencies:
-
-Make sure that Python and Tkinter are properly installed on both operating systems. Tkinter is included with most Python installations, but on some Linux distributions, you might need to install it separately (e.g., sudo apt-get install python3-tk).
-Permissions:
-
-Ensure that the directories and files you are trying to access or modify have the appropriate permissions, especially on Linux where permissions can be stricter than on Windows.
-Testing:
-
-Always test the application on both platforms to catch any OS-specific behaviors. You can use virtual machines or dual-boot setups for this purpose.
-Summary
-With the above points in mind, your application should function properly on both Windows and Linux without any additional modifications. If you encounter any issues specific to either operating system, feel free to ask for assistance!
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Arm bibary already supplied but if using x86 64 then recomile!
-and build from source!
-
-gcc -o duplicate-remover duplicate-remover.c -lcrypto `pkg-config --cflags --libs gtk+-3.0`
+gcc -o zipper zipper.c `pkg-config --cflags --libs gtk+-3.0` -lz
 
 
-After you can compiled the c program and made the binary run ./install.sh to install to your system!
 
 
 
